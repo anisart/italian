@@ -8,6 +8,13 @@
 #include <qwt_plot_marker.h>
 #include <qwt_symbol.h>
 #include <qwt_plot_grid.h>
+#include <QBitArray>
+
+#define F_WIDTH     100
+#define F_HEIGHT    100
+#define PI          3.14159265
+#define NUM         10
+#define D_VAL       2
 
 namespace Ui {
 class MainWindow;
@@ -23,21 +30,48 @@ public:
     
 private:
     Ui::MainWindow *ui;
-    QwtPlotCurve **curve;
-    QwtPlotMarker **mark;
+    QwtPlotCurve **curve, **curve2;
+    QwtPlotMarker **mark, **mark2;
     QTimer *timer;
-    QwtPlotGrid *grid;
+    QwtPlotGrid *grid, *grid2;
+//    double d[NUM][NUM];
 
-    double **x, **y, **z;
-    double *w;
-    double d, a, mu, r, v;
+    double **x, **y, **xr, **yr, **zr;
+    double *w, *f;
+    double a, r, v;
     double Tmin, Tmax, dt;
-    int count, num;
+    int count;
     int t;
 
-//    double *vx, *vy;
+    QBitArray used;
+    QVector <int> comp;
+    QVector <int> d[NUM];
 
     void solveStep(int i);
+    void dfs(int k);
+
+    double dx(double *X, double *Y, double *Z, int k, int l)
+    {
+            return -w[k] * Y[k] - Z[k];
+    }
+
+
+    double dy(double *X, double *Y, double *Z, int k, int l)
+    {
+            double sync = 0;
+            int i;
+            foreach (i, d[k])
+                sync += D_VAL * (Y[i] - Y[k]);
+
+            return w[k] * X[k] + a * Y[k] + sync;
+    }
+
+    double dz(double *X, double *Y, double *Z, int k, int l)
+    {
+            return 0.1 + Z[k] * (X[k] - 8.5);
+    }
+
+    friend QDebug operator<< (QDebug dbg, const QBitArray& array);
 
 public slots:
     void replot();
@@ -47,6 +81,16 @@ signals:
 
 private slots:
     void on_pauseBtn_clicked();
+    void on_syncBox_clicked();
 };
+
+inline QDebug operator<< (QDebug dbg, const QBitArray& array)
+{
+    QString text;
+    for (int i = 0; i < array.size(); ++i)
+        text += array.testBit(i) ? "1": "0";
+    dbg << text;
+    return dbg;
+}
 
 #endif // MAINWINDOW_H

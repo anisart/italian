@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>469</width>
-    <height>327</height>
+    <width>747</width>
+    <height>319</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -45,6 +45,13 @@
         </widget>
        </item>
        <item>
+        <widget class="QCheckBox" name="syncBox">
+         <property name="text">
+          <string>Sync</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <spacer name="verticalSpacer">
          <property name="orientation">
           <enum>Qt::Vertical</enum>
@@ -59,6 +66,9 @@
        </item>
       </layout>
      </widget>
+    </item>
+    <item>
+     <widget class="QwtPlot" name="qwtPlot2"/>
     </item>
    </layout>
   </widget>
