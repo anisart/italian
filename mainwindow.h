@@ -14,7 +14,7 @@
 #define F_HEIGHT    100
 #define PI          3.14159265
 #define NUM         10
-#define D_VAL       2
+#define D_VAL       1
 
 namespace Ui {
 class MainWindow;
@@ -35,10 +35,12 @@ private:
     QTimer *timer;
     QwtPlotGrid *grid, *grid2;
 //    double d[NUM][NUM];
+    double ws[NUM];
+    int counter[NUM][NUM], flag[NUM][NUM];
 
     double **x, **y, **xr, **yr, **zr;
     double *w, *f;
-    double a, r, v;
+    double a, b, c, r, v;
     double Tmin, Tmax, dt;
     int count;
     int t;
@@ -68,7 +70,7 @@ private:
 
     double dz(double *X, double *Y, double *Z, int k, int l)
     {
-            return 0.1 + Z[k] * (X[k] - 8.5);
+            return b + Z[k] * (X[k] - c);
     }
 
     friend QDebug operator<< (QDebug dbg, const QBitArray& array);
