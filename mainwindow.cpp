@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+#include <QKeyEvent>
 
 
 MainWindow::MainWindow(QWidget *parent) :
@@ -26,7 +27,7 @@ MainWindow::MainWindow(QWidget *parent) :
         curve[j]->setPen(QColor(rColor[j],gColor[j],bColor[j]));
 
         mark[j] = new QwtPlotMarker;
-        mark[j]->setSymbol(new QwtSymbol(QwtSymbol::Ellipse, QColor(Qt::transparent), QColor(Qt::black), QSize(5,5)));
+        mark[j]->setSymbol(new QwtSymbol(QwtSymbol::Ellipse, QColor(rColor[j],gColor[j],bColor[j]), QColor(Qt::black), QSize(5,5)));
     }
 
     ui->qwtPlot->setAxisScale(QwtPlot::xBottom, 0, F_WIDTH);
@@ -46,11 +47,11 @@ MainWindow::MainWindow(QWidget *parent) :
         curve2[j]->setPen(QColor(rColor[j],gColor[j],bColor[j]));
 
         mark2[j] = new QwtPlotMarker;
-        mark2[j]->setSymbol(new QwtSymbol(QwtSymbol::Ellipse, QColor(Qt::transparent), QColor(Qt::black), QSize(5,5)));
+        mark2[j]->setSymbol(new QwtSymbol(QwtSymbol::Ellipse, QColor(rColor[j],gColor[j],bColor[j]), QColor(Qt::black), QSize(5,5)));
     }
 
-    ui->qwtPlot2->setAxisScale(QwtPlot::xBottom, -20, 20);
-    ui->qwtPlot2->setAxisScale(QwtPlot::yLeft, -20, 20);
+    ui->qwtPlot2->setAxisScale(QwtPlot::xBottom, -30, 30);
+    ui->qwtPlot2->setAxisScale(QwtPlot::yLeft, -30, 30);
     grid2 = new QwtPlotGrid;
     grid2->setMajPen(QPen(Qt::black,0,Qt::DotLine));
     grid2->attach(ui->qwtPlot2);
@@ -64,13 +65,21 @@ MainWindow::MainWindow(QWidget *parent) :
     Tmin = 0;
     Tmax = 200;
     count = 100000;
-    t = 0;
+    speed = ui->speedSld->value();
     connect(this, SIGNAL(stepChanged(int)), ui->lcdNumber, SLOT(display(int)));
     ui->lcdNumber->setNumDigits(trunc(log10(count)));
+    connect(ui->speedSld, SIGNAL(valueChanged(int)), this, SLOT(speedChange(int)));
+
+    used.resize(NUM);
+
+    dt = (Tmax - Tmin) / 10000;  // /count;
+
+    timer = new QTimer(this);
+    connect(timer, SIGNAL(timeout()), this, SLOT(replot()));
+
+    //////////////////////
 
     w = new double[NUM];
-    for (int i = 0; i < NUM; ++i)
-        w[i] = (double)rand()/RAND_MAX * 0.1 + 0.95;
 
     x = new double * [NUM];
     y = new double * [NUM];
@@ -79,42 +88,50 @@ MainWindow::MainWindow(QWidget *parent) :
     yr = new double * [NUM];
     zr = new double * [NUM];
 
-    f = new double [NUM];
+//    f = new double [NUM];
 
     for (int j = 0; j < NUM; ++j)
     {
         x[j] = new double[count];
         y[j] = new double[count];
 
-        x[j][0] = (double)rand()/RAND_MAX * F_WIDTH;
-        y[j][0] = (double)rand()/RAND_MAX * F_HEIGHT;
-
         xr[j] = new double[count];
         yr[j] = new double[count];
         zr[j] = new double[count];
+    }
 
-        xr[j][0] = -8 + (double)rand()/RAND_MAX * 16;
-        yr[j][0] = -8 + (double)rand()/RAND_MAX * 16;
-        zr[j][0] = -2 + (double)rand()/RAND_MAX * 4;
+    initVars();
+}
 
-        f[j] = atan(yr[j][0]/xr[j][0]);
+MainWindow::~MainWindow()
+{
+    delete ui;
+}
+
+void MainWindow::initVars()
+{
+    t = 0;
+
+    for (int i = 0; i < NUM; ++i)
+        w[i] = (double)rand()/RAND_MAX * 0.1 + 0.95;
+
+    for (int j = 0; j < NUM; ++j)
+    {
+        x[j][0] = (double)rand()/RAND_MAX * F_WIDTH;
+        y[j][0] = (double)rand()/RAND_MAX * F_HEIGHT;
+
+        xr[j][0] = -10 + (double)rand()/RAND_MAX * 20;
+        yr[j][0] = -10 + (double)rand()/RAND_MAX * 20;
+        zr[j][0] = 0;//-4 + (double)rand()/RAND_MAX * 8;
+
+//        f[j] = atan(yr[j][0]/xr[j][0]);
         ws[j] = 0;
 
         for (int i=0; i < NUM; ++i)
             counter[j][i] = 0;
     }
 
-    used.resize(NUM);
-
-    dt = (Tmax - Tmin) / 10000;  // /count;
-
-    timer = new QTimer(this);
-    connect(timer, SIGNAL(timeout()), this, SLOT(replot()));
-}
-
-MainWindow::~MainWindow()
-{
-    delete ui;
+    ui->countLbl->setText(QString::number(ui->countLbl->text().toInt()+1));
 }
 
 void MainWindow::solveStep(int i)
@@ -131,6 +148,8 @@ void MainWindow::solveStep(int i)
 
     used.clear();
     used.resize(NUM);
+    used2.clear();
+    used2.resize(NUM);
 
     for (int j = 0; j < NUM; ++j)
     {
@@ -191,9 +210,10 @@ void MainWindow::solveStep(int i)
         yr[j][i] = yr[j][i-1] + (Y1[j] + 2 * Y2[j] + 2 * Y3[j] + Y4[j]) / 6;
         zr[j][i] = zr[j][i-1] + (Z1[j] + 2 * Z2[j] + 2 * Z3[j] + Z4[j]) / 6;
 
-        f[j] = atan(yr[j][i]/xr[j][i]);
+//        f[j] = atan(yr[j][i]/xr[j][i]);
 
-//        ws[j] = ((Z+W*Y)*(Y*W*W-X*a*W-Y*a*a+Z*W)+(a*Y+W*X)*(X*W*W+a*Y*W+b-c*Z+X*Z))/((Z+W*Y)*(Z+W*Y)+(a*Y+W*X)*(a*Y+W*X));
+        double X = xr[j][i]; double Y = yr[j][i]; double Z = zr[j][i]; double W = w[j];
+        ws[j] = ((Z+W*Y)*(Y*W*W-X*a*W-Y*a*a+Z*W)+(a*Y+W*X)*(X*W*W+a*Y*W+b-c*Z+X*Z))/((Z+W*Y)*(Z+W*Y)+(a*Y+W*X)*(a*Y+W*X));
 //        if(i%10==0)
 //        {
 //            ws[j] /= 10;
@@ -213,38 +233,26 @@ void MainWindow::solveStep(int i)
 //            qDebug()<<"===";
             for (int k = 0; k < comp.size(); ++k)
             {
-                theta[comp.at(k)] = (double)rand()/RAND_MAX * 2 * PI - PI;
+//                theta[comp.at(k)] = (double)rand()/RAND_MAX * 2 * PI - PI;
 //                qDebug()<<comp.at(k);//<<f[comp.at(k)];
-                for (int l = k+1; l < comp.size(); ++l)
+                d2[comp.at(k)].clear();
+                for (int l = 0; l < comp.size(); ++l)
                 {
-                    if (i - flag[comp.at(k)][comp.at(l)] == 1)
-                    {
-                        counter[comp.at(k)][comp.at(l)]++;
-//                        qDebug()<<i;
-                        ws[comp.at(k)] += ((zr[comp.at(k)][i]+w[comp.at(k)]*yr[comp.at(k)][i])*(yr[comp.at(k)][i]*w[comp.at(k)]*w[comp.at(k)]-xr[comp.at(k)][i]*a*w[comp.at(k)]-yr[comp.at(k)][i]*a*a+zr[comp.at(k)][i]*w[comp.at(k)])
-                               +(a*yr[comp.at(k)][i]+w[comp.at(k)]*xr[comp.at(k)][i])*(xr[comp.at(k)][i]*w[comp.at(k)]*w[comp.at(k)]+a*yr[comp.at(k)][i]*w[comp.at(k)]+b-c*zr[comp.at(k)][i]+xr[comp.at(k)][i]*zr[comp.at(k)][i]))
-                                /((zr[comp.at(k)][i]+w[comp.at(k)]*yr[comp.at(k)][i])*(zr[comp.at(k)][i]+w[comp.at(k)]*yr[comp.at(k)][i])+(a*yr[comp.at(k)][i]+w[comp.at(k)]*xr[comp.at(k)][i])*(a*yr[comp.at(k)][i]+w[comp.at(k)]*xr[comp.at(k)][i]));
-                        ws[comp.at(l)] += ((zr[comp.at(l)][i]+w[comp.at(l)]*yr[comp.at(l)][i])*(yr[comp.at(l)][i]*w[comp.at(l)]*w[comp.at(l)]-xr[comp.at(l)][i]*a*w[comp.at(l)]-yr[comp.at(l)][i]*a*a+zr[comp.at(l)][i]*w[comp.at(l)])
-                               +(a*yr[comp.at(l)][i]+w[comp.at(l)]*xr[comp.at(l)][i])*(xr[comp.at(l)][i]*w[comp.at(l)]*w[comp.at(l)]+a*yr[comp.at(l)][i]*w[comp.at(l)]+b-c*zr[comp.at(l)][i]+xr[comp.at(l)][i]*zr[comp.at(l)][i]))
-                                /((zr[comp.at(l)][i]+w[comp.at(l)]*yr[comp.at(l)][i])*(zr[comp.at(l)][i]+w[comp.at(l)]*yr[comp.at(l)][i])+(a*yr[comp.at(l)][i]+w[comp.at(l)]*xr[comp.at(l)][i])*(a*yr[comp.at(l)][i]+w[comp.at(l)]*xr[comp.at(l)][i]));
+                    if (fabs(ws[comp.at(l)] - ws[comp.at(k)]) < 0.01)
+                        d2[comp.at(k)].append(comp.at(l));
+                }
+            }
+        }
 
-                        if (/*(counter[comp.at(k)][comp.at(l)]%5==0)&&*/(fabs((ws[comp.at(k)] - ws[comp.at(l)])/5)<0.01))
-                        {
-//                            qDebug()<<comp.at(k)<<comp.at(l);
-                            theta[comp.at(k)] = theta[comp.at(l)] = (double)rand()/RAND_MAX * 2 * PI - PI;
-                        }
-                    }
-                    else
-                    {
-                        counter[comp.at(k)][comp.at(l)] = 1;
-                        ws[comp.at(k)] = ((zr[comp.at(k)][i]+w[comp.at(k)]*yr[comp.at(k)][i])*(yr[comp.at(k)][i]*w[comp.at(k)]*w[comp.at(k)]-xr[comp.at(k)][i]*a*w[comp.at(k)]-yr[comp.at(k)][i]*a*a+zr[comp.at(k)][i]*w[comp.at(k)])
-                               +(a*yr[comp.at(k)][i]+w[comp.at(k)]*xr[comp.at(k)][i])*(xr[comp.at(k)][i]*w[comp.at(k)]*w[comp.at(k)]+a*yr[comp.at(k)][i]*w[comp.at(k)]+b-c*zr[comp.at(k)][i]+xr[comp.at(k)][i]*zr[comp.at(k)][i]))
-                                /((zr[comp.at(k)][i]+w[comp.at(k)]*yr[comp.at(k)][i])*(zr[comp.at(k)][i]+w[comp.at(k)]*yr[comp.at(k)][i])+(a*yr[comp.at(k)][i]+w[comp.at(k)]*xr[comp.at(k)][i])*(a*yr[comp.at(k)][i]+w[comp.at(k)]*xr[comp.at(k)][i]));
-                        ws[comp.at(l)] = ((zr[comp.at(l)][i]+w[comp.at(l)]*yr[comp.at(l)][i])*(yr[comp.at(l)][i]*w[comp.at(l)]*w[comp.at(l)]-xr[comp.at(l)][i]*a*w[comp.at(l)]-yr[comp.at(l)][i]*a*a+zr[comp.at(l)][i]*w[comp.at(l)])
-                               +(a*yr[comp.at(l)][i]+w[comp.at(l)]*xr[comp.at(l)][i])*(xr[comp.at(l)][i]*w[comp.at(l)]*w[comp.at(l)]+a*yr[comp.at(l)][i]*w[comp.at(l)]+b-c*zr[comp.at(l)][i]+xr[comp.at(l)][i]*zr[comp.at(l)][i]))
-                                /((zr[comp.at(l)][i]+w[comp.at(l)]*yr[comp.at(l)][i])*(zr[comp.at(l)][i]+w[comp.at(l)]*yr[comp.at(l)][i])+(a*yr[comp.at(l)][i]+w[comp.at(l)]*xr[comp.at(l)][i])*(a*yr[comp.at(l)][i]+w[comp.at(l)]*xr[comp.at(l)][i]));
-                    }
-                    flag[comp.at(k)][comp.at(l)] = i;
+        for (int j = 0; j < NUM; ++j)
+        {
+            if (!used2.testBit(j))
+            {
+                comp2.clear();
+                dfs2(j);
+                for (int k = 0; k < comp2.size(); ++k)
+                {
+                    theta[comp2.at(k)] = (double)rand()/RAND_MAX * 2 * PI - PI;
                 }
             }
         }
@@ -300,8 +308,13 @@ void MainWindow::replot()
         int ind = std::max(0, t - 50000 / (int)Tmax);
         for (int l = ind; l < t; l++)
         {
-//            if((xr[j][l] < -20)||(xr[j][l] > 20)||(yr[j][l] < -20)||(yr[j][l] > 20))
-//                qDebug()<<"Rossler["<<j<<"] is dead";
+//            if((xr[j][l] < -30)||(xr[j][l] > 30)||(yr[j][l] < -30)||(yr[j][l] > 30))
+//            {
+//                qDebug()<<xr[j][0]<<yr[j][0]<<zr[j][0]<<w[j];
+//                stopProcess();
+//                on_pauseBtn_clicked();
+//                initVars();
+//            }
 
             xtrail.append(xr[j][l]);
             ytrail.append(yr[j][l]);
@@ -318,9 +331,20 @@ void MainWindow::replot()
 
     if (t > count - 2)
     {
-        killTimer(timer->timerId());
-        ui->pauseBtn->setEnabled(false);
-        return;
+        stopProcess();
+//        return;
+    }
+
+//    if (t==500) initVars();
+}
+
+void MainWindow::speedChange(int value)
+{
+    speed = value;
+    if (ui->pauseBtn->text() == "Pause")
+    {
+        timer->stop();
+        timer->start(speed);
     }
 }
 
@@ -333,7 +357,7 @@ void MainWindow::on_pauseBtn_clicked()
     }
     else
     {
-        timer->start(1);
+        timer->start(speed);
         ui->pauseBtn->setText("Pause");
     }
 }
@@ -356,4 +380,33 @@ void MainWindow::dfs(int k)
         if (!used.testBit(to))
             dfs(to);
     }
+}
+
+void MainWindow::dfs2(int k)
+{
+    used2.setBit(k,true);
+    comp2.append(k);
+    for (int i = 0; i < d2[k].size(); ++i)
+    {
+        int to = d2[k].at(i);
+        if (!used2.testBit(to))
+            dfs2(to);
+    }
+}
+
+void MainWindow::stopProcess()
+{
+    killTimer(timer->timerId());
+    ui->pauseBtn->setEnabled(false);
+}
+
+void MainWindow::keyPressEvent(QKeyEvent * event)
+{
+    if (event->key() == Qt::Key_Escape)
+        qApp->quit();
+}
+
+void MainWindow::on_resetBtn_clicked()
+{
+    initVars();
 }

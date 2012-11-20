@@ -14,7 +14,7 @@
 #define F_HEIGHT    100
 #define PI          3.14159265
 #define NUM         10
-#define D_VAL       1
+#define D_VAL       2          ///////
 
 namespace Ui {
 class MainWindow;
@@ -43,14 +43,17 @@ private:
     double a, b, c, r, v;
     double Tmin, Tmax, dt;
     int count;
-    int t;
+    int t, speed;
 
-    QBitArray used;
-    QVector <int> comp;
-    QVector <int> d[NUM];
+    QBitArray used, used2;
+    QVector <int> comp, comp2;
+    QVector <int> d[NUM], d2[NUM];
 
+    void initVars();
     void solveStep(int i);
     void dfs(int k);
+    void dfs2(int k);
+    void stopProcess();
 
     double dx(double *X, double *Y, double *Z, int k, int l)
     {
@@ -77,6 +80,7 @@ private:
 
 public slots:
     void replot();
+    void speedChange(int value);
 
 signals:
     void stepChanged(int value);
@@ -84,6 +88,11 @@ signals:
 private slots:
     void on_pauseBtn_clicked();
     void on_syncBox_clicked();
+
+    void on_resetBtn_clicked();
+
+protected:
+    void keyPressEvent(QKeyEvent * event);
 };
 
 inline QDebug operator<< (QDebug dbg, const QBitArray& array)
