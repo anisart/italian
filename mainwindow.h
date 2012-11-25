@@ -14,7 +14,7 @@
 #define         PI              3.14159265
 const int       areaWidth =     100;
 const int       areaHeight =    100;
-const int       num =           50;
+const int       num =           100;
 #define         D_VAL           1
 const double    v =             0.1;
 const double    a =             0.16;
@@ -24,9 +24,9 @@ const double    r =             10;
 const int       Tmin =          0;
 const int       Tmax =          200;
 const int       count =         100000;
-const int       tt =            100;
+const int       tt =            50;
 const int       tv =            10;
-
+const int       ttt =           300;
 
 namespace Ui {
 class MainWindow;
@@ -50,7 +50,7 @@ private:
     TriMatrix <double> *wss;
     TriMatrix <int> *flag;
 
-    double **x, **y, **xr, **yr, **zr;
+    QList <double> *x, *y, *xr, *yr, *zr;
     double *w;
     double dd;
     double dt;

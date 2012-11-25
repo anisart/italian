@@ -1,8 +1,6 @@
 #ifndef TRIMATRIX_H
 #define TRIMATRIX_H
 
-#include <QList>
-
 template <typename T>
 class TriMatrix
 {
