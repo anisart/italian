@@ -49,12 +49,21 @@
          <property name="text">
           <string>Sync</string>
          </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
         </widget>
        </item>
        <item>
         <widget class="QPushButton" name="resetBtn">
          <property name="text">
           <string>Reset</string>
+         </property>
+         <property name="checkable">
+          <bool>false</bool>
+         </property>
+         <property name="flat">
+          <bool>false</bool>
          </property>
         </widget>
        </item>
@@ -93,9 +102,6 @@
          </property>
          <property name="tickPosition">
           <enum>QSlider::TicksBothSides</enum>
-         </property>
-         <property name="tickInterval">
-          <number>10</number>
          </property>
         </widget>
        </item>

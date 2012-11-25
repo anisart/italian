@@ -2,21 +2,21 @@
 #include "ui_mainwindow.h"
 #include <QKeyEvent>
 
-
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
 
-    curve = new QwtPlotCurve * [NUM];
-    mark = new QwtPlotMarker * [NUM];
+    curve = new QwtPlotCurve * [num];
+    mark = new QwtPlotMarker * [num];
+    mark1 = new QwtPlotMarker * [num];
 
-    int rColor[NUM];
-    int gColor[NUM];
-    int bColor[NUM];
+    int rColor[num];
+    int gColor[num];
+    int bColor[num];
 
-    for (int j = 0; j < NUM; ++j)
+    for (int j = 0; j < num; ++j)
     {
         rColor[j] = 50 + (double)rand()/RAND_MAX * 205;
         gColor[j] = 50 + (double)rand()/RAND_MAX * 205;
@@ -28,19 +28,21 @@ MainWindow::MainWindow(QWidget *parent) :
 
         mark[j] = new QwtPlotMarker;
         mark[j]->setSymbol(new QwtSymbol(QwtSymbol::Ellipse, QColor(rColor[j],gColor[j],bColor[j]), QColor(Qt::black), QSize(5,5)));
+        mark1[j] = new QwtPlotMarker;
+//        mark1[j]->setSymbol(new QwtSymbol());
     }
 
-    ui->qwtPlot->setAxisScale(QwtPlot::xBottom, 0, F_WIDTH);
-    ui->qwtPlot->setAxisScale(QwtPlot::yLeft, 0, F_HEIGHT);
+    ui->qwtPlot->setAxisScale(QwtPlot::xBottom, 0, areaWidth);
+    ui->qwtPlot->setAxisScale(QwtPlot::yLeft, 0, areaHeight);
     grid = new QwtPlotGrid;
     grid->setMajPen(QPen(Qt::black,0,Qt::DotLine));
     grid->attach(ui->qwtPlot);
 
     ///////////////////////////////////////
-    curve2 = new QwtPlotCurve * [NUM];
-    mark2 = new QwtPlotMarker * [NUM];
+    curve2 = new QwtPlotCurve * [num];
+    mark2 = new QwtPlotMarker * [num];
 
-    for (int j = 0; j < NUM; ++j)
+    for (int j = 0; j < num; ++j)
     {
         curve2[j] = new QwtPlotCurve;
         curve2[j]->setRenderHint(QwtPlotItem::RenderAntialiased);
@@ -57,40 +59,32 @@ MainWindow::MainWindow(QWidget *parent) :
     grid2->attach(ui->qwtPlot2);
     ///////////////////////////////////////
 
-    v = 2;
-    a = 0.16;
-    b = 0.1;
-    c = 8.5;
-    r = 5;
-    Tmin = 0;
-    Tmax = 200;
-    count = 100000;
     speed = ui->speedSld->value();
     connect(this, SIGNAL(stepChanged(int)), ui->lcdNumber, SLOT(display(int)));
     ui->lcdNumber->setNumDigits(trunc(log10(count)));
     connect(ui->speedSld, SIGNAL(valueChanged(int)), this, SLOT(speedChange(int)));
 
-    used.resize(NUM);
+    used.resize(num);
 
-    dt = (Tmax - Tmin) / 10000;  // /count;
+    dt = (Tmax - Tmin) / (double)10000;  // /count;
 
     timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(replot()));
 
     //////////////////////
 
-    w = new double[NUM];
+    w = new double[num];
 
-    x = new double * [NUM];
-    y = new double * [NUM];
+    x = new double * [num];
+    y = new double * [num];
 
-    xr = new double * [NUM];
-    yr = new double * [NUM];
-    zr = new double * [NUM];
+    xr = new double * [num];
+    yr = new double * [num];
+    zr = new double * [num];
 
-//    f = new double [NUM];
+//    f = new double [num];
 
-    for (int j = 0; j < NUM; ++j)
+    for (int j = 0; j < num; ++j)
     {
         x[j] = new double[count];
         y[j] = new double[count];
@@ -100,6 +94,9 @@ MainWindow::MainWindow(QWidget *parent) :
         zr[j] = new double[count];
     }
 
+    flag = new TriMatrix<int>(num);
+    wss = new TriMatrix<double>(num);
+    on_syncBox_clicked();
     initVars();
 }
 
@@ -112,46 +109,44 @@ void MainWindow::initVars()
 {
     t = 0;
 
-    for (int i = 0; i < NUM; ++i)
-        w[i] = (double)rand()/RAND_MAX * 0.1 + 0.95;
-
-    for (int j = 0; j < NUM; ++j)
+    for (int j = 0; j < num; ++j)
     {
-        x[j][0] = (double)rand()/RAND_MAX * F_WIDTH;
-        y[j][0] = (double)rand()/RAND_MAX * F_HEIGHT;
+        w[j] = (double)rand()/RAND_MAX * 0.1 + 0.95;
+
+        x[j][0] = (double)rand()/RAND_MAX * areaWidth;
+        y[j][0] = (double)rand()/RAND_MAX * areaHeight;
 
         xr[j][0] = -10 + (double)rand()/RAND_MAX * 20;
         yr[j][0] = -10 + (double)rand()/RAND_MAX * 20;
         zr[j][0] = 0;//-4 + (double)rand()/RAND_MAX * 8;
 
-//        f[j] = atan(yr[j][0]/xr[j][0]);
         ws[j] = 0;
-
-        for (int i=0; i < NUM; ++i)
-            counter[j][i] = 0;
     }
+
+    flag->fill(0);
+    wss->fill(0);
 
     ui->countLbl->setText(QString::number(ui->countLbl->text().toInt()+1));
 }
 
 void MainWindow::solveStep(int i)
 {
-    double X1[NUM], X2[NUM], X3[NUM], X4[NUM];
-    double Y1[NUM], Y2[NUM], Y3[NUM], Y4[NUM];
-    double Z1[NUM], Z2[NUM], Z3[NUM], Z4[NUM];
+    double X1[num], X2[num], X3[num], X4[num];
+    double Y1[num], Y2[num], Y3[num], Y4[num];
+    double Z1[num], Z2[num], Z3[num], Z4[num];
 
-    double X1_[NUM], X2_[NUM], X3_[NUM];
-    double Y1_[NUM], Y2_[NUM], Y3_[NUM];
-    double Z1_[NUM], Z2_[NUM], Z3_[NUM];
+    double X1_[num], X2_[num], X3_[num];
+    double Y1_[num], Y2_[num], Y3_[num];
+    double Z1_[num], Z2_[num], Z3_[num];
 
-    double x_[NUM], y_[NUM], z_[NUM];
+    double x_[num], y_[num], z_[num];
 
     used.clear();
-    used.resize(NUM);
+    used.resize(num);
     used2.clear();
-    used2.resize(NUM);
+    used2.resize(num);
 
-    for (int j = 0; j < NUM; ++j)
+    for (int j = 0; j < num; ++j)
     {
         x_[j] = xr[j][i-1];
         y_[j] = yr[j][i-1];
@@ -159,7 +154,7 @@ void MainWindow::solveStep(int i)
 
         d[j].clear();
 
-        for (int k = 0; k < NUM; ++k)
+        for (int k = 0; k < num; ++k)
         {
             if ((x[k][i-1] - x[j][i-1]) * (x[k][i-1] - x[j][i-1])
                     + (y[k][i-1] - y[j][i-1]) * (y[k][i-1] - y[j][i-1]) < r * r)
@@ -167,7 +162,7 @@ void MainWindow::solveStep(int i)
         }
     }
 
-    for (int j = 0; j < NUM; ++j)
+    for (int j = 0; j < num; ++j)
     {
         X1[j] = dx(x_, y_, z_, j, i) * dt;
         Y1[j] = dy(x_, y_, z_, j, i) * dt;
@@ -178,7 +173,7 @@ void MainWindow::solveStep(int i)
         Z1_[j] = zr[j][i-1] + Z1[j] / 2;
     }
 
-    for (int j = 0; j < NUM; ++j)
+    for (int j = 0; j < num; ++j)
     {
         X2[j] = dx(X1_, Y1_, Z1_, j, i) * dt;
         Y2[j] = dy(X1_, Y1_, Z1_, j, i) * dt;
@@ -189,7 +184,7 @@ void MainWindow::solveStep(int i)
         Z2_[j] = zr[j][i-1] + Z2[j] / 2;
     }
 
-    for (int j = 0; j < NUM; ++j)
+    for (int j = 0; j < num; ++j)
     {
         X3[j] = dx(X2_, Y2_, Z2_, j, i) * dt;
         Y3[j] = dy(X2_, Y2_, Z2_, j, i) * dt;
@@ -200,7 +195,7 @@ void MainWindow::solveStep(int i)
         Z3_[j] = zr[j][i-1] + Z3[j];
     }
 
-    for (int j = 0; j < NUM; ++j)
+    for (int j = 0; j < num; ++j)
     {
         X4[j] = dx(X3_, Y3_, Z3_, j, i) * dt;
         Y4[j] = dy(X3_, Y3_, Z3_, j, i) * dt;
@@ -209,8 +204,6 @@ void MainWindow::solveStep(int i)
         xr[j][i] = xr[j][i-1] + (X1[j] + 2 * X2[j] + 2 * X3[j] + X4[j]) / 6;
         yr[j][i] = yr[j][i-1] + (Y1[j] + 2 * Y2[j] + 2 * Y3[j] + Y4[j]) / 6;
         zr[j][i] = zr[j][i-1] + (Z1[j] + 2 * Z2[j] + 2 * Z3[j] + Z4[j]) / 6;
-
-//        f[j] = atan(yr[j][i]/xr[j][i]);
 
         double X = xr[j][i]; double Y = yr[j][i]; double Z = zr[j][i]; double W = w[j];
         ws[j] = ((Z+W*Y)*(Y*W*W-X*a*W-Y*a*a+Z*W)+(a*Y+W*X)*(X*W*W+a*Y*W+b-c*Z+X*Z))/((Z+W*Y)*(Z+W*Y)+(a*Y+W*X)*(a*Y+W*X));
@@ -222,8 +215,8 @@ void MainWindow::solveStep(int i)
 //        }
     }
 
-    double *theta = new double [NUM];
-    for (int j = 0; j < NUM; ++j)
+    double *theta = new double [num];
+    for (int j = 0; j < num; ++j)
     {
         if (!used.testBit(j))
         {
@@ -233,26 +226,53 @@ void MainWindow::solveStep(int i)
 //            qDebug()<<"===";
             for (int k = 0; k < comp.size(); ++k)
             {
-//                theta[comp.at(k)] = (double)rand()/RAND_MAX * 2 * PI - PI;
-//                qDebug()<<comp.at(k);//<<f[comp.at(k)];
-                d2[comp.at(k)].clear();
+                int K = comp.at(k);
+//                theta[K] = (double)rand()/RAND_MAX * 2 * PI - PI;
+//                qDebug()<<K;//<<f[K];
+                d2[K].clear();
                 for (int l = 0; l < comp.size(); ++l)
                 {
-                    if (fabs(ws[comp.at(l)] - ws[comp.at(k)]) < 0.01)
-                        d2[comp.at(k)].append(comp.at(l));
+                    int L = comp.at(l);
+                    if (flag->at(K,L) < tt)
+                        {
+                            flag->setValue(K, L, flag->at(K,L) + 1);
+                            wss->setValue(K, L, wss->at(K,L) + fabs(ws[L] - ws[K]));
+                        }
+                    else
+                        if (flag->at(K,L) > tt)
+                            d2[K].append(L);
+                        else
+                        {
+                            wss->setValue(K, L, wss->at(K,L) + fabs(ws[L] - ws[K]));
+                            if (wss->at(K,L) < 0.01)
+                            {
+                                flag->setValue(K, L, flag->at(K,L) + 1);
+                            }
+                            else
+                            {
+                                flag->setValue(K,L,0);
+                                wss->setValue(K,L,0);
+                            }
+                        }
                 }
             }
         }
 
-        for (int j = 0; j < NUM; ++j)
+        for (int j = 0; j < num; ++j)
         {
             if (!used2.testBit(j))
             {
                 comp2.clear();
                 dfs2(j);
+                double angle = (double)rand()/RAND_MAX * 2 * PI - PI;
                 for (int k = 0; k < comp2.size(); ++k)
                 {
-                    theta[comp2.at(k)] = (double)rand()/RAND_MAX * 2 * PI - PI;
+                    theta[comp2.at(k)] = angle;
+                    if (comp2.size() > 1)
+                        mark1[comp2.at(k)]->setSymbol
+                            (new QwtSymbol(QwtSymbol::Ellipse, QColor(Qt::transparent), QPen(QColor(Qt::red),3), QSize(8,8)));
+                    else
+                        mark1[comp2.at(k)]->setSymbol(new QwtSymbol());
                 }
             }
         }
@@ -267,14 +287,14 @@ void MainWindow::solveStep(int i)
         if (x[j][i] < 0)
             x[j][i] = -x[j][i];
 
-        if (x[j][i] > F_WIDTH)
-            x[j][i] = 2 * F_WIDTH - x[j][i];
+        if (x[j][i] > areaWidth)
+            x[j][i] = 2 * areaWidth - x[j][i];
 
         if (y[j][i] < 0)
             y[j][i] = -y[j][i];
 
-        if (y[j][i] > F_HEIGHT)
-            y[j][i] = 2 * F_HEIGHT - y[j][i];
+        if (y[j][i] > areaHeight)
+            y[j][i] = 2 * areaHeight - y[j][i];
     }
 }
 
@@ -283,11 +303,12 @@ void MainWindow::replot()
     emit stepChanged(t);
     t++;
     solveStep(t);
+    if (t%tv!=0) return;
 
-    for (int j = 0; j < NUM; ++j)
+    for (int j = 0; j < num; ++j)
     {
         QVector <double> xtrail, ytrail;
-        int ind = std::max(0, t - 3000 / (int)Tmax);
+        int ind = std::max(0, t - 6000 / Tmax);
         for (int l = ind; l < t; l++)
         {
             xtrail.append(x[j][l]);
@@ -298,26 +319,28 @@ void MainWindow::replot()
         curve[j]->attach(ui->qwtPlot);
         mark[j]->setValue(x[j][t-1], y[j][t-1]);
         mark[j]->attach(ui->qwtPlot);
+        mark1[j]->setValue(x[j][t-1], y[j][t-1]);
+        mark1[j]->attach(ui->qwtPlot);
     }
     ui->qwtPlot->replot();
 
     //////////////////////////////////
-    for (int j = 0; j < NUM; ++j)
+    for (int j = 0; j < num; ++j)
     {
         QVector <double> xtrail, ytrail;
-        int ind = std::max(0, t - 50000 / (int)Tmax);
+        int ind = std::max(0, t - 50000 / Tmax);
         for (int l = ind; l < t; l++)
         {
-//            if((xr[j][l] < -30)||(xr[j][l] > 30)||(yr[j][l] < -30)||(yr[j][l] > 30))
-//            {
-//                qDebug()<<xr[j][0]<<yr[j][0]<<zr[j][0]<<w[j];
+            if((xr[j][l] < -30)||(xr[j][l] > 30)||(yr[j][l] < -30)||(yr[j][l] > 30))
+            {
 //                stopProcess();
-//                on_pauseBtn_clicked();
+                on_pauseBtn_clicked();
 //                initVars();
-//            }
+                qDebug()<<j<<xr[j][l]<<yr[j][l];
+            }
 
             xtrail.append(xr[j][l]);
-            ytrail.append(yr[j][l]);
+            ytrail.append(yr[j][l]);//qDebug()<<xtrail;
         }
 
         curve2[j]->setSamples(xtrail, ytrail);
@@ -343,7 +366,6 @@ void MainWindow::speedChange(int value)
     speed = value;
     if (ui->pauseBtn->text() == "Pause")
     {
-        timer->stop();
         timer->start(speed);
     }
 }
@@ -364,10 +386,10 @@ void MainWindow::on_pauseBtn_clicked()
 
 void MainWindow::on_syncBox_clicked()
 {
-    if (ui->syncBox->isChecked());//
-//        d = 0.5;
-    else;//
-//        d = 0;
+    if (ui->syncBox->isChecked())
+        dd = D_VAL;
+    else
+        dd = 0;
 }
 
 void MainWindow::dfs(int k)
@@ -398,6 +420,7 @@ void MainWindow::stopProcess()
 {
     killTimer(timer->timerId());
     ui->pauseBtn->setEnabled(false);
+    ui->speedSld->setEnabled(false);
 }
 
 void MainWindow::keyPressEvent(QKeyEvent * event)
@@ -409,4 +432,8 @@ void MainWindow::keyPressEvent(QKeyEvent * event)
 void MainWindow::on_resetBtn_clicked()
 {
     initVars();
+    ui->pauseBtn->setText("Pause");
+    ui->pauseBtn->setEnabled(true);
+    ui->speedSld->setEnabled(true);
+    timer->start(speed);
 }
