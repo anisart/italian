@@ -14,7 +14,7 @@
 #define         PI              3.14159265
 const int       areaWidth =     100;
 const int       areaHeight =    100;
-const int       num =           100;
+const int       num =           50;
 #define         D_VAL           1
 const double    v =             0.1;
 const double    a =             0.16;
@@ -24,9 +24,9 @@ const double    r =             10;
 const int       Tmin =          0;
 const int       Tmax =          200;
 const int       count =         100000;
-const int       tt =            50;
+const int       tt =            10;
 const int       tv =            10;
-const int       ttt =           300;
+const int       ttt =           100;
 
 namespace Ui {
 class MainWindow;
@@ -46,15 +46,13 @@ private:
     QwtPlotMarker **mark, **mark2, **mark1;
     QTimer *timer;
     QwtPlotGrid *grid, *grid2;
-    double ws[num];
-    TriMatrix <double> *wss;
     TriMatrix <int> *flag;
 
-    QList <double> *x, *y, *xr, *yr, *zr;
+    QList <double> *x, *y, *xr, *yr, *zr, *ws;
     double *w;
     double dd;
     double dt;
-    int t, speed;
+    int t, tick;
 
     QBitArray used, used2;
     QVector <int> comp, comp2;
@@ -89,18 +87,15 @@ private:
 
     friend QDebug operator<< (QDebug dbg, const QBitArray& array);
 
-public slots:
-    void replot();
-    void speedChange(int value);
-
 signals:
     void stepChanged(int value);
 
 private slots:
+    void replot();
     void on_pauseBtn_clicked();
-    void on_syncBox_clicked();
-
     void on_resetBtn_clicked();
+    void on_forceSld_valueChanged(int value);
+    void on_tickSld_valueChanged(int value);
 
 protected:
     void keyPressEvent(QKeyEvent * event);

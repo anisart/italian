@@ -56,10 +56,12 @@ MainWindow::MainWindow(QWidget *parent) :
     grid2->setMajPen(QPen(Qt::black,0,Qt::DotLine));
     grid2->attach(ui->qwtPlot2);
 
-    speed = ui->speedSld->value();
+    tick = ui->tickSld->value();
+    ui->tickLbl->setText(QString::number(tick));
     connect(this, SIGNAL(stepChanged(int)), ui->lcdNumber, SLOT(display(int)));
     ui->lcdNumber->setNumDigits(trunc(log10(count)));
-    connect(ui->speedSld, SIGNAL(valueChanged(int)), this, SLOT(speedChange(int)));
+    dd = (double) ui->forceSld->value() / 10;
+    ui->forceLbl->setText(QString::number(dd, 'f', 1));
 
     used.resize(num);
 
@@ -69,6 +71,7 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(timer, SIGNAL(timeout()), this, SLOT(replot()));
 
     w = new double[num];
+    ws = new QList <double> [num];
 
     x = new QList <double> [num];
     y = new QList <double> [num];
@@ -78,8 +81,6 @@ MainWindow::MainWindow(QWidget *parent) :
     zr = new QList <double> [num];
 
     flag = new TriMatrix<int>(num);
-    wss = new TriMatrix<double>(num);
-    on_syncBox_clicked();
     initVars();
 }
 
@@ -99,6 +100,7 @@ void MainWindow::initVars()
         xr[j].clear();
         yr[j].clear();
         zr[j].clear();
+        ws[j].clear();
 
         w[j] = (double)rand()/RAND_MAX * 0.1 + 0.95;
 
@@ -108,12 +110,9 @@ void MainWindow::initVars()
         xr[j] << -10 + (double)rand()/RAND_MAX * 20;
         yr[j] << -10 + (double)rand()/RAND_MAX * 20;
         zr[j] << 0;//-4 + (double)rand()/RAND_MAX * 8;
-
-        ws[j] = 0;
     }
 
     flag->fill(0);
-    wss->fill(0);
 
     ui->countLbl->setText(QString::number(ui->countLbl->text().toInt()+1));
 }
@@ -197,6 +196,7 @@ void MainWindow::solveStep(int i)
             xr[j].removeFirst();
             yr[j].removeFirst();
             zr[j].removeFirst();
+            ws[j].removeFirst();
         }
 
         xr[j] << xr[j].last() + (X1[j] + 2 * X2[j] + 2 * X3[j] + X4[j]) / 6;
@@ -204,10 +204,11 @@ void MainWindow::solveStep(int i)
         zr[j] << zr[j].last() + (Z1[j] + 2 * Z2[j] + 2 * Z3[j] + Z4[j]) / 6;
 
         double X = xr[j].last(); double Y = yr[j].last(); double Z = zr[j].last(); double W = w[j];
-        ws[j] = ((Z+W*Y)*(Y*W*W-X*a*W-Y*a*a+Z*W)+(a*Y+W*X)*(X*W*W+a*Y*W+b-c*Z+X*Z))/((Z+W*Y)*(Z+W*Y)+(a*Y+W*X)*(a*Y+W*X));
+        ws[j] << ((Z+W*Y)*(Y*W*W-X*a*W-Y*a*a+Z*W)+(a*Y+W*X)*(X*W*W+a*Y*W+b-c*Z+X*Z))/((Z+W*Y)*(Z+W*Y)+(a*Y+W*X)*(a*Y+W*X));
     }
 
     double *theta = new double [num];
+    int end  = ws[0].size();
     for (int j = 0; j < num; ++j)
     {
         if (!used.testBit(j))
@@ -220,38 +221,47 @@ void MainWindow::solveStep(int i)
                 d2[K].clear();
                 for (int l = 0; l < comp.size(); ++l)
                 {
+                    if (i < ttt)
+                        break;
                     int L = comp.at(l);
-                    if (flag->at(K,L) < tt)
+                    if ((K == L) || (flag->at(K,L) > tt))
+                    {
+                        d2[K].append(L);
+                        continue;
+                    }
+                    if (l >= k)
+                    {
+                        flag->setValue(K, L, flag->at(K,L) + 1);
+
+                        if (flag->at(K,L) == tt)
                         {
-                            flag->setValue(K, L, flag->at(K,L) + 1);
-                            wss->setValue(K, L, wss->at(K,L) + fabs(ws[L] - ws[K]));
-                        }
-                    else
-                        if (flag->at(K,L) > tt)
-                            d2[K].append(L);
-                        else
-                        {
-                            wss->setValue(K, L, wss->at(K,L) + fabs(ws[L] - ws[K]));
-                            if (wss->at(K,L) < 0.01)
+                            double wss = 0;
+                            for (int m = 0; m < end; ++m)
                             {
+                                wss += fabs(ws[L].at(m) - ws[K].at(m));
+                            }
+                            if (wss < 0.01)
+                            {
+                                qDebug()<<"sync"<<K<<L;
+                                d2[K].append(L);
                                 flag->setValue(K, L, flag->at(K,L) + 1);
                             }
                             else
                             {
                                 flag->setValue(K,L,0);
-                                wss->setValue(K,L,0);
                             }
                         }
+                    }
                 }
             }
         }
 
-        for (int j = 0; j < num; ++j)
+        for (int l = 0; l < num; ++l)
         {
-            if (!used2.testBit(j))
+            if (!used2.testBit(l))
             {
                 comp2.clear();
-                dfs2(j);
+                dfs2(l);
                 double angle = (double)rand()/RAND_MAX * 2 * PI - PI;
                 for (int k = 0; k < comp2.size(); ++k)
                 {
@@ -323,19 +333,9 @@ void MainWindow::replot()
     if (t > count - 2)
     {
         stopProcess();
-//        return;
     }
 
 //    if (t==500) initVars();
-}
-
-void MainWindow::speedChange(int value)
-{
-    speed = value;
-    if (ui->pauseBtn->text() == "Pause")
-    {
-        timer->start(speed);
-    }
 }
 
 void MainWindow::on_pauseBtn_clicked()
@@ -347,17 +347,9 @@ void MainWindow::on_pauseBtn_clicked()
     }
     else
     {
-        timer->start(speed);
+        timer->start(tick);
         ui->pauseBtn->setText("Pause");
     }
-}
-
-void MainWindow::on_syncBox_clicked()
-{
-    if (ui->syncBox->isChecked())
-        dd = D_VAL;
-    else
-        dd = 0;
 }
 
 void MainWindow::dfs(int k)
@@ -388,7 +380,7 @@ void MainWindow::stopProcess()
 {
     killTimer(timer->timerId());
     ui->pauseBtn->setEnabled(false);
-    ui->speedSld->setEnabled(false);
+    ui->tickSld->setEnabled(false);
 }
 
 void MainWindow::keyPressEvent(QKeyEvent * event)
@@ -402,6 +394,22 @@ void MainWindow::on_resetBtn_clicked()
     initVars();
     ui->pauseBtn->setText("Pause");
     ui->pauseBtn->setEnabled(true);
-    ui->speedSld->setEnabled(true);
-    timer->start(speed);
+    ui->tickSld->setEnabled(true);
+    timer->start(tick);
+}
+
+void MainWindow::on_forceSld_valueChanged(int value)
+{
+    dd = (double) value / 10;
+    ui->forceLbl->setText(QString::number(dd, 'f', 1));
+}
+
+void MainWindow::on_tickSld_valueChanged(int value)
+{
+    tick = value;
+    if (ui->pauseBtn->text() == "Pause")
+    {
+        timer->start(tick);
+    }
+    ui->tickLbl->setText(QString::number(value));
 }
