@@ -16,6 +16,7 @@ MainWindow::MainWindow(QWidget *parent) :
     int gColor[num];
     int bColor[num];
 
+#pragma omp parallel for
     for (int j = 0; j < num; ++j)
     {
         rColor[j] = 50 + (double)rand()/RAND_MAX * 205;
@@ -40,6 +41,7 @@ MainWindow::MainWindow(QWidget *parent) :
     curve2 = new QwtPlotCurve * [num];
     mark2 = new QwtPlotMarker * [num];
 
+#pragma omp parallel for
     for (int j = 0; j < num; ++j)
     {
         curve2[j] = new QwtPlotCurve;
@@ -81,7 +83,32 @@ MainWindow::MainWindow(QWidget *parent) :
     zr = new QList <double> [num];
 
     flag = new TriMatrix<int>(num);
+    p = new int[num];
     initVars();
+
+    ////////////////////// phase
+//    QWidget *win = new QWidget(this, Qt::Window);
+//    qwtPlot3 = new QwtPlot;
+//    curve3 = new QwtPlotCurve * [num];
+//    for (int j = 0; j < num; ++j)
+//    {
+//        curve3[j] = new QwtPlotCurve;
+//        curve3[j]->setRenderHint(QwtPlotItem::RenderAntialiased);
+//        curve3[j]->setPen(QColor(rColor[j],gColor[j],bColor[j]));
+//    }
+//    grid3 = new QwtPlotGrid;
+//    grid3->setMajPen(QPen(Qt::black,0,Qt::DotLine));
+//    grid3->attach(qwtPlot3);
+//    qwtPlot3->setAxisScale(QwtPlot::xBottom, 0, 100);
+//    qwtPlot3->setAxisScale(QwtPlot::yLeft, 0, 50000);
+//    QVBoxLayout *layout = new QVBoxLayout;
+//    layout->addWidget(qwtPlot3);
+//    win->setLayout(layout);
+//    win->show();
+
+//    for (int i = 0; i < ttt; ++i) {
+//        xAxis<<i;
+//    }
 }
 
 MainWindow::~MainWindow()
@@ -93,6 +120,7 @@ void MainWindow::initVars()
 {
     t = 0;
 
+#pragma omp parallel for
     for (int j = 0; j < num; ++j)
     {
         x[j].clear();
@@ -110,6 +138,8 @@ void MainWindow::initVars()
         xr[j] << -10 + (double)rand()/RAND_MAX * 20;
         yr[j] << -10 + (double)rand()/RAND_MAX * 20;
         zr[j] << 0;//-4 + (double)rand()/RAND_MAX * 8;
+
+        p[j] = 0;
     }
 
     flag->fill(0);
@@ -134,6 +164,7 @@ void MainWindow::solveStep(int i)
     used2.clear();
     used2.resize(num);
 
+#pragma omp parallel for
     for (int j = 0; j < num; ++j)
     {
         x_[j] = xr[j].last();
@@ -150,6 +181,7 @@ void MainWindow::solveStep(int i)
         }
     }
 
+#pragma omp parallel for
     for (int j = 0; j < num; ++j)
     {
         X1[j] = dx(x_, y_, z_, j, i) * dt;
@@ -161,6 +193,7 @@ void MainWindow::solveStep(int i)
         Z1_[j] = zr[j].last() + Z1[j] / 2;
     }
 
+#pragma omp parallel for
     for (int j = 0; j < num; ++j)
     {
         X2[j] = dx(X1_, Y1_, Z1_, j, i) * dt;
@@ -172,6 +205,7 @@ void MainWindow::solveStep(int i)
         Z2_[j] = zr[j].last() + Z2[j] / 2;
     }
 
+#pragma omp parallel for
     for (int j = 0; j < num; ++j)
     {
         X3[j] = dx(X2_, Y2_, Z2_, j, i) * dt;
@@ -183,6 +217,7 @@ void MainWindow::solveStep(int i)
         Z3_[j] = zr[j].last() + Z3[j];
     }
 
+#pragma omp parallel for
     for (int j = 0; j < num; ++j)
     {
         X4[j] = dx(X3_, Y3_, Z3_, j, i) * dt;
@@ -205,9 +240,17 @@ void MainWindow::solveStep(int i)
 
         double X = xr[j].last(); double Y = yr[j].last(); double Z = zr[j].last(); double W = w[j];
         ws[j] << ((Z+W*Y)*(Y*W*W-X*a*W-Y*a*a+Z*W)+(a*Y+W*X)*(X*W*W+a*Y*W+b-c*Z+X*Z))/((Z+W*Y)*(Z+W*Y)+(a*Y+W*X)*(a*Y+W*X));
+//        ws[j] << atan((w[j] * xr[j].last() + a * yr[j].last()) / (-w[j] * yr[j].last() - zr[j].last())) + PI * p[j];    // == f
+//        if ((ws[j].size()>2)&&(ws[j].at(ws[j].size()-2) - ws[j].last() > 0))
+//        {
+////            qDebug()<<"klhi";
+//            p[j]++;
+//            ws[j].replace(ws[j].size()-1, ws[j].last() + PI * p[j]);
+//        }
     }
 
-    double *theta = new double [num];
+    vx = new double[num];
+    vy = new double[num];
     int end  = ws[0].size();
     for (int j = 0; j < num; ++j)
     {
@@ -240,7 +283,8 @@ void MainWindow::solveStep(int i)
                             {
                                 wss += fabs(ws[L].at(m) - ws[K].at(m));
                             }
-                            if (wss < 0.01)
+//                            double dif = fabs( (wss / (double)end) - fabs(ws[L].last() - ws[K].last()));
+                            if (wss < eps)
                             {
                                 qDebug()<<"sync"<<K<<L;
                                 d2[K].append(L);
@@ -263,23 +307,26 @@ void MainWindow::solveStep(int i)
                 comp2.clear();
                 dfs2(l);
                 double angle = (double)rand()/RAND_MAX * 2 * PI - PI;
+                double vxs = v * cos(angle);
+                double vys = v * sin(angle);
                 for (int k = 0; k < comp2.size(); ++k)
                 {
-                    theta[comp2.at(k)] = angle;
+                    vx[comp2.at(k)] = vxs;
+                    vy[comp2.at(k)] = vys;
                     if (comp2.size() > 1)
+                    {
                         mark1[comp2.at(k)]->setSymbol
                             (new QwtSymbol(QwtSymbol::Ellipse, QColor(Qt::transparent), QPen(QColor(Qt::red),3), QSize(8,8)));
+//                        qDebug()<<comp2.at(k)<<xr[comp2.at(k)].last()<<yr[comp2.at(k)].last();
+                    }
                     else
                         mark1[comp2.at(k)]->setSymbol(new QwtSymbol());
                 }
             }
         }
 
-        double vx = v * cos(theta[j]);
-        double vy = v * sin(theta[j]);
-
-        x[j].append(x[j].last() + vx);
-        y[j].append(y[j].last() + vy);
+        x[j].append(x[j].last() + vx[j]);
+        y[j].append(y[j].last() + vy[j]);
 
         if (x[j].last() < 0)
             x[j].replace(x[j].size() - 1, -x[j].last());
@@ -329,6 +376,13 @@ void MainWindow::replot()
         mark2[j]->attach(ui->qwtPlot2);
     }
     ui->qwtPlot2->replot();
+
+//    for (int j = 0; j < num; ++j)
+//    {
+//        curve3[j]->setSamples(QVector<double>::fromList(xAxis), QVector<double>::fromList(ws[j]));
+//        curve3[j]->attach(qwtPlot3);
+//        qwtPlot3->replot();
+//    }
 
     if (t > count - 2)
     {

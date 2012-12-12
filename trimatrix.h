@@ -23,7 +23,7 @@ public:
         data = new T [dataSize];
     }
 
-    ~TriMatrix()
+    virtual ~TriMatrix()
     {
         delete [] data;
     }

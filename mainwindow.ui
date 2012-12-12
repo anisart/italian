@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>747</width>
-    <height>319</height>
+    <width>764</width>
+    <height>330</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -136,14 +136,14 @@
             <property name="value">
              <number>10</number>
             </property>
-            <property name="tracking">
-             <bool>true</bool>
-            </property>
             <property name="orientation">
              <enum>Qt::Vertical</enum>
             </property>
             <property name="tickPosition">
              <enum>QSlider::TicksBothSides</enum>
+            </property>
+            <property name="tickInterval">
+             <number>10</number>
             </property>
            </widget>
           </item>

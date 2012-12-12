@@ -22,3 +22,6 @@ FORMS       += mainwindow.ui
 LIBS += -lqwt
 INCLUDEPATH += /usr/include/qwt
 DEPENDPATH += /usr/include/qwt
+
+QMAKE_CXXFLAGS += -fopenmp
+QMAKE_LFLAGS += -fopenmp

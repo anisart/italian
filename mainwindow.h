@@ -14,19 +14,20 @@
 #define         PI              3.14159265
 const int       areaWidth =     100;
 const int       areaHeight =    100;
-const int       num =           50;
+const int       num =           100;
 #define         D_VAL           1
-const double    v =             0.1;
+const double    v =             0.2;
 const double    a =             0.16;
 const double    b =             0.1;
 const double    c =             8.5;
 const double    r =             10;
 const int       Tmin =          0;
 const int       Tmax =          200;
-const int       count =         100000;
+const int       count =         1000000;
 const int       tt =            10;
 const int       tv =            10;
 const int       ttt =           100;
+const double    eps =           0.02;
 
 namespace Ui {
 class MainWindow;
@@ -48,11 +49,15 @@ private:
     QwtPlotGrid *grid, *grid2;
     TriMatrix <int> *flag;
 
+    /////
+    QwtPlot *qwtPlot3; QwtPlotCurve **curve3; QwtPlotGrid *grid3; QList <double> xAxis;
+    ////
+
     QList <double> *x, *y, *xr, *yr, *zr, *ws;
-    double *w;
+    double *w, *vx, *vy;
     double dd;
     double dt;
-    int t, tick;
+    int t, tick, *p;
 
     QBitArray used, used2;
     QVector <int> comp, comp2;
@@ -66,23 +71,25 @@ private:
 
     double dx(double *X, double *Y, double *Z, int k, int l)
     {
-            return -w[k] * Y[k] - Z[k];
+        double sync = 0;
+        foreach (int i, d[k])
+            sync += dd * (X[i] - X[k]);
+        return -w[k] * Y[k] - Z[k] + sync;
     }
 
 
     double dy(double *X, double *Y, double *Z, int k, int l)
     {
-            double sync = 0;
-            int i;
-            foreach (i, d[k])
-                sync += dd * (Y[i] - Y[k]);
+        double sync = 0;
+        foreach (int i, d[k])
+            sync += dd * (Y[i] - Y[k]);
 
-            return w[k] * X[k] + a * Y[k] + sync;
+        return w[k] * X[k] + a * Y[k] + sync;
     }
 
     double dz(double *X, double *Y, double *Z, int k, int l)
     {
-            return b + Z[k] * (X[k] - c);
+        return b + Z[k] * (X[k] - c);
     }
 
     friend QDebug operator<< (QDebug dbg, const QBitArray& array);
